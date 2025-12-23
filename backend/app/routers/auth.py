@@ -114,3 +114,11 @@ def register_staff(data: user_schema.StaffRegister, db: Session = Depends(get_db
     )
     
     return {"access_token": access_token, "token_type": "bearer", "user": user_read}
+
+
+@router.post("/logout")
+def logout(current_user: User = Depends(security.get_current_user_dependency_placeholder)):
+    # Since we use stateless JWTs, "logout" is mostly a frontend action (deleting the token).
+    # However, to be thorough, we could add token blacklisting here in the future.
+    # For now, we return a success message.
+    return {"message": "Successfully logged out"}
