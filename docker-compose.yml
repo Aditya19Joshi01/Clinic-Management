@@ -8,3 +8,35 @@ services:
     ports:
       - "80:80"
     restart: always
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfiles/backend.dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/clinic_db
+      - SECRET_KEY=supersecretkey
+      - ACCESS_TOKEN_EXPIRE_MINUTES=10080
+    depends_on:
+      - db
+    restart: always
+
+  db:
+    image: postgres:15
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=clinic_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
+
+
