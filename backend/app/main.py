@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import auth
+from app.routers import auth, patients, appointments, follow_ups, dashboard, staff
 from app.database import engine, Base
 
 # Create tables (for development only; production usage should rely on Alembic)
@@ -19,6 +19,11 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(patients.router)
+app.include_router(appointments.router)
+app.include_router(follow_ups.router)
+app.include_router(dashboard.router)
+app.include_router(staff.router)
 
 @app.get("/")
 def read_root():
