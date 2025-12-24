@@ -5,7 +5,7 @@ from app.database import engine, Base
 from app.config import settings
 
 # Create tables (for development only; production usage should rely on Alembic)
-Base.metadata.create_all(bind=engine)
+# Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Clinic Management System", version="1.0.0")
 
