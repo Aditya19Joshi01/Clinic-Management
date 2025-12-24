@@ -81,7 +81,8 @@ patients = db.query(models.Patient).filter(
 | **Manage Appointments** | ✅ | ✅ |
 | **View Other Staff** | ❌ | ✅ |
 | **Delete Staff** | ❌ | ✅ |
-| **Register Company** | ❌ | ❌ (Public) |
+| **Register Company** | ❌ | ✅ |
+| **View Other Company info** | ❌ | ❌ |
 
 ## API Documentation
 
