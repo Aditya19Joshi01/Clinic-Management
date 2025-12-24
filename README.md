@@ -1,4 +1,5 @@
 # Clinic Management System
+![Backend CI](https://github.com/Aditya19Joshi01/Clinic-Management/actions/workflows/ci.yml/badge.svg)
 
 A robust, multi-tenant Clinic Management System built with a modern tech stack. It enables clinics to manage patients, appointments, staff, and follow-ups efficiently with strict data isolation between different companies.
 
