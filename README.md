@@ -36,7 +36,7 @@ A robust, multi-tenant Clinic Management System built with a modern tech stack. 
 
 ## System Architecture
 
-![System Architecture](/images/system_architecture.png)
+![System Architecture](/images/architecture.png)
 
 ## Feature Roadmap
 
