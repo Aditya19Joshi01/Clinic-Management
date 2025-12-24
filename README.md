@@ -15,6 +15,23 @@ A robust, multi-tenant Clinic Management System built with a modern tech stack. 
 -   **Containerized**: Fully Dockerized for easy deployment.
 -   **CI/CD**: GitHub Actions pipeline for automated backend testing.
 
+## Gallery
+
+### Core Interfaces
+| Login Screen | Dashboard |
+| :---: | :---: |
+| ![Login](/images/login_screen.png) | ![Dashboard](/images/dashboard.png) |
+
+### Clinical Workflow
+| Patients List | Appointment Booking |
+| :---: | :---: |
+| ![Patients](/images/patients_list.png) | ![Appointments](/images/appointment_booking.png) |
+
+### Management
+| Staff Admin |
+| :---: |
+| ![Staff](/images/admin_staff_management.png) |
+
 ## Tech Stack Choices & Rationale
 
 ### Backend
