@@ -17,10 +17,10 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app
+    env_file:
+      - ./backend/.env
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/clinic_db
-      - SECRET_KEY=supersecretkey
-      - ACCESS_TOKEN_EXPIRE_MINUTES=10080
     depends_on:
       - db
     restart: always

@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import auth, patients, appointments, follow_ups, dashboard, staff
 from app.database import engine, Base
+from app.config import settings
 
 # Create tables (for development only; production usage should rely on Alembic)
 Base.metadata.create_all(bind=engine)
@@ -9,15 +10,7 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(title="Clinic Management System", version="1.0.0")
 
 # CORS Configuration
-origins = [
-    "http://localhost:5173",
-    "http://localhost:3000",
-    "http://localhost",
-    "http://localhost:80",
-    "http://localhost:7000",
-    "http://127.0.0.1",
-    "http://127.0.0.1:80",
-]
+origins = settings.CORS_ORIGINS
 
 app.add_middleware(
     CORSMiddleware,
