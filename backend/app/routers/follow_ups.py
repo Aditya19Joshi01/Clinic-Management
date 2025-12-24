@@ -8,7 +8,7 @@ from app.models import User, FollowUp, Patient
 from app.schemas import follow_up as follow_up_schema
 from app.utils import security
 
-router = APIRouter(prefix="/api/followups", tags=["followups"])
+router = APIRouter(prefix="/api/follow-ups", tags=["followups"])
 
 @router.get("/", response_model=List[follow_up_schema.FollowUpRead])
 def get_followups(

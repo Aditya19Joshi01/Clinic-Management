@@ -1,7 +1,7 @@
 import random
 import string
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app.models import User, Company
 from app.schemas import user as user_schema
@@ -19,7 +19,7 @@ class LoginRequest(user_schema.BaseModel):
 
 @router.post("/login", response_model=token_schema.Token)
 def login(credentials: LoginRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == credentials.email).first()
+    user = db.query(User).options(joinedload(User.company)).filter(User.email == credentials.email).first()
     if not user or not security.verify_password(credentials.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -35,7 +35,8 @@ def login(credentials: LoginRequest, db: Session = Depends(get_db)):
         id=user.id,
         role=user.role,
         company_id=user.company_id,
-        company_name=user.company.name
+        company_name=user.company.name,
+        company_code=user.company.code
     )
 
     return {"access_token": access_token, "token_type": "bearer", "user": user_read}
@@ -75,7 +76,8 @@ def register_company(data: user_schema.CompanyRegister, db: Session = Depends(ge
         id=new_user.id,
         role=new_user.role,
         company_id=new_company.id,
-        company_name=new_company.name
+        company_name=new_company.name,
+        company_code=new_company.code
     )
     
     return {"access_token": access_token, "token_type": "bearer", "user": user_read}
@@ -110,7 +112,8 @@ def register_staff(data: user_schema.StaffRegister, db: Session = Depends(get_db
         id=new_user.id,
         role=new_user.role,
         company_id=company.id,
-        company_name=company.name
+        company_name=company.name,
+        company_code=company.code
     )
     
     return {"access_token": access_token, "token_type": "bearer", "user": user_read}

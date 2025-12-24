@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -20,17 +20,19 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { mockAppointments, mockPatients } from '@/data/mockData';
+import api from '@/lib/api';
 import { Appointment } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { Calendar, Clock, Plus, User } from 'lucide-react';
 
 export default function Appointments() {
   const { toast } = useToast();
-  const [appointments, setAppointments] = useState<Appointment[]>(mockAppointments);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [patients, setPatients] = useState<any[]>([]); // simplified type for dropdown
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>('all');
-  
+  const [isLoading, setIsLoading] = useState(true);
+
   // New appointment form state
   const [newAppointment, setNewAppointment] = useState({
     patientId: '',
@@ -38,6 +40,44 @@ export default function Appointments() {
     time: '',
     reason: '',
   });
+
+  const fetchData = async () => {
+    try {
+      setIsLoading(true);
+      const [aptRes, patRes] = await Promise.all([
+        api.get('/appointments/'),
+        api.get('/patients/')
+      ]);
+
+      const mappedAppointments = aptRes.data.map((a: any) => ({
+        id: a.id,
+        patientName: a.patient_name || a.patientName || 'Unknown',
+        patientId: a.patient_id,
+        date: a.date,
+        time: a.time,
+        status: a.status,
+        reason: a.reason,
+        companyId: a.company_id
+      }));
+
+      const mappedPatients = patRes.data.map((p: any) => ({
+        id: p.id,
+        name: p.name
+      }));
+
+      setAppointments(mappedAppointments);
+      setPatients(mappedPatients);
+    } catch (error) {
+      console.error("Failed to fetch data:", error);
+      toast({ title: 'Error', description: 'Failed to load appointments', variant: 'destructive' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   const filteredAppointments = useMemo(() => {
     let filtered = [...appointments];
@@ -63,34 +103,65 @@ export default function Appointments() {
     return groups;
   }, [filteredAppointments]);
 
-  const handleCreateAppointment = (e: React.FormEvent) => {
+  const handleCreateAppointment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newAppointment.patientId || !newAppointment.date || !newAppointment.time || !newAppointment.reason) {
       toast({ title: 'Error', description: 'Please fill in all fields', variant: 'destructive' });
       return;
     }
 
-    const patient = mockPatients.find((p) => p.id === newAppointment.patientId);
-    const appointment: Appointment = {
-      id: `appointment_${Date.now()}`,
-      ...newAppointment,
-      patientName: patient?.name || 'Unknown',
-      status: 'scheduled',
-      companyId: '1',
-      createdAt: new Date(),
-    };
+    try {
+      const payload = {
+        patient_id: newAppointment.patientId,
+        date: newAppointment.date,
+        time: newAppointment.time,
+        reason: newAppointment.reason,
+        type: 'general', // Default type
+        status: 'scheduled',
+        notes: ''
+      };
 
-    setAppointments([...appointments, appointment]);
-    setNewAppointment({ patientId: '', date: '', time: '', reason: '' });
-    setIsDialogOpen(false);
-    toast({ title: 'Appointment created', description: `Appointment scheduled for ${patient?.name}.` });
+      const response = await api.post('/appointments/', payload);
+      const a = response.data;
+      const patient = patients.find(p => p.id === newAppointment.patientId);
+
+      const createdAppointment: Appointment = {
+        id: a.id,
+        patientId: a.patient_id,
+        patientName: patient?.name || 'Unknown',
+        date: a.date,
+        time: a.time,
+        status: a.status,
+        reason: a.reason,
+        companyId: a.company_id,
+        createdAt: new Date()
+      };
+
+      setAppointments([...appointments, createdAppointment]);
+      setNewAppointment({ patientId: '', date: '', time: '', reason: '' });
+      setIsDialogOpen(false);
+      toast({ title: 'Appointment created', description: `Appointment scheduled for ${patient?.name}.` });
+    } catch (error) {
+      console.error("Failed to create appointment:", error);
+      toast({ title: 'Error', description: 'Failed to create appointment', variant: 'destructive' });
+    }
   };
 
-  const handleStatusChange = (appointmentId: string, newStatus: 'scheduled' | 'completed' | 'cancelled') => {
-    setAppointments(appointments.map((a) =>
-      a.id === appointmentId ? { ...a, status: newStatus } : a
-    ));
-    toast({ title: 'Status updated', description: `Appointment marked as ${newStatus}.` });
+  const handleStatusChange = async (appointmentId: string, newStatus: 'scheduled' | 'completed' | 'cancelled') => {
+    try {
+      // Optimistic update
+      const oldAppointments = [...appointments];
+      setAppointments(appointments.map((a) =>
+        a.id === appointmentId ? { ...a, status: newStatus } : a
+      ));
+
+      await api.patch(`/appointments/${appointmentId}`, { status: newStatus });
+      toast({ title: 'Status updated', description: `Appointment marked as ${newStatus}.` });
+    } catch (error) {
+      console.error("Failed to update status:", error);
+      toast({ title: 'Error', description: 'Failed to update status', variant: 'destructive' });
+      fetchData(); // Revert on failure
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -161,7 +232,7 @@ export default function Appointments() {
                         <SelectValue placeholder="Select patient" />
                       </SelectTrigger>
                       <SelectContent>
-                        {mockPatients.map((patient) => (
+                        {patients.map((patient) => (
                           <SelectItem key={patient.id} value={patient.id}>
                             {patient.name}
                           </SelectItem>
@@ -202,7 +273,9 @@ export default function Appointments() {
                     <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                       Cancel
                     </Button>
-                    <Button type="submit">Create Appointment</Button>
+                    <Button type="submit" disabled={isLoading}>
+                      {isLoading ? 'Scheduling...' : 'Create Appointment'}
+                    </Button>
                   </div>
                 </form>
               </DialogContent>
@@ -211,7 +284,9 @@ export default function Appointments() {
         </div>
 
         {/* Appointments List */}
-        {Object.keys(groupedAppointments).length === 0 ? (
+        {isLoading ? (
+          <div className="text-center py-12 text-muted-foreground">Loading appointments...</div>
+        ) : Object.keys(groupedAppointments).length === 0 ? (
           <Card className="border-border">
             <CardContent className="flex flex-col items-center justify-center py-12">
               <Calendar className="h-12 w-12 text-muted-foreground/50 mb-3" />

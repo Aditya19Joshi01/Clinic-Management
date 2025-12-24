@@ -22,3 +22,13 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     company = relationship("app.models.company.Company")
+
+    @property
+    def company_name(self):
+        return self.company.name if self.company else ""
+
+    @property
+    def company_code(self):
+        return self.company.code if self.company else ""
+
+

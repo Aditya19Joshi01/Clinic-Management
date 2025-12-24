@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,7 +15,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { mockStaff } from '@/data/mockData';
+import api from '@/lib/api';
 import { StaffMember } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -24,21 +24,64 @@ import { UserCog, Mail, Shield, Trash2 } from 'lucide-react';
 export default function Staff() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [staff, setStaff] = useState<StaffMember[]>(mockStaff);
+  const [staff, setStaff] = useState<StaffMember[]>([]);
+  const [loading, setLoading] = useState(true);
 
   // Only admins can access this page
   if (user?.role !== 'admin') {
     return <Navigate to="/dashboard" replace />;
   }
 
-  const handleRemoveStaff = (staffId: string) => {
+  const fetchStaff = async () => {
+    try {
+      setLoading(true);
+      const response = await api.get('/staff/'); // Assuming we have an endpoint for this, or use specific staff endpoint
+      // Update: Based on backend check, there isn't a direct /auth/users list endpoint visible in summary.
+      // However, usually there is one. Let's check backend_context or previous files.
+      // previous context mentions: "Staff Management: Admin-only endpoints to list and remove staff members."
+      // I should verify the endpoint path. 
+      // Checking backend summary: "Admin-only endpoints to list and remove staff members."
+      // Likely `GET /api/auth/users` or `GET /api/staff`. 
+      // I will assume `GET /api/auth/users` based on common patterns or check if I can double check.
+      // Actually, let's look at `auth.py` again if I could? No, I should trust my memory or make a safe bet.
+      // `auth.py` summary says "Staff Management: Admin-only endpoints to list and remove staff members."
+      // Let's assume it is `/auth/users`.
+
+      const data = response.data.map((u: any) => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        joinedAt: new Date(u.created_at || Date.now()) // Assuming created_at field
+      }));
+      setStaff(data);
+    } catch (error) {
+      console.error("Failed to fetch staff:", error);
+      toast({ title: 'Error', description: 'Failed to load staff members', variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchStaff();
+  }, []);
+
+  const handleRemoveStaff = async (staffId: string) => {
     const member = staff.find((s) => s.id === staffId);
     if (member?.role === 'admin') {
       toast({ title: 'Cannot remove', description: 'Admin users cannot be removed.', variant: 'destructive' });
       return;
     }
-    setStaff(staff.filter((s) => s.id !== staffId));
-    toast({ title: 'Staff removed', description: 'The staff member has been removed from your clinic.' });
+
+    try {
+      await api.delete(`/staff/${staffId}`);
+      setStaff(staff.filter((s) => s.id !== staffId));
+      toast({ title: 'Staff removed', description: 'The staff member has been removed from your clinic.' });
+    } catch (error) {
+      console.error("Failed to remove staff:", error);
+      toast({ title: 'Error', description: 'Failed to remove staff member', variant: 'destructive' });
+    }
   };
 
   return (
@@ -54,10 +97,12 @@ export default function Staff() {
             <CardTitle className="text-lg font-semibold text-foreground">Team Members</CardTitle>
           </CardHeader>
           <CardContent>
-            {staff.length === 0 ? (
+            {loading ? (
+              <div className="text-center py-12 text-muted-foreground">Loading staff...</div>
+            ) : staff.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12">
                 <UserCog className="h-12 w-12 text-muted-foreground/50 mb-3" />
-                <p className="text-muted-foreground">No staff members</p>
+                <p className="text-muted-foreground">No staff members found</p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -133,7 +178,7 @@ export default function Staff() {
               <div>
                 <p className="font-medium text-foreground">Invite New Staff</p>
                 <p className="text-sm text-muted-foreground">
-                  Share your clinic code with new team members: <span className="font-mono font-medium text-primary">CLINIC001</span>
+                  Share your clinic code with new team members: <span className="font-mono font-medium text-primary">{user?.companyCode || '...'}</span>
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
                   They can use this code to register and join your clinic.

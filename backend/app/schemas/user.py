@@ -2,6 +2,7 @@ from pydantic import BaseModel, EmailStr
 from uuid import UUID
 from enum import Enum
 from typing import Optional
+from datetime import datetime
 
 class UserRole(str, Enum):
     admin = "admin"
@@ -21,6 +22,8 @@ class UserRead(UserBase):
     role: UserRole
     company_id: UUID
     company_name: str
+    company_code: str
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

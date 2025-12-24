@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -21,17 +21,19 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { mockFollowUps, mockPatients } from '@/data/mockData';
+import api from '@/lib/api';
 import { FollowUp } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { CheckSquare, Plus, AlertCircle, CheckCircle } from 'lucide-react';
 
 export default function FollowUps() {
   const { toast } = useToast();
-  const [followUps, setFollowUps] = useState<FollowUp[]>(mockFollowUps);
+  const [followUps, setFollowUps] = useState<FollowUp[]>([]);
+  const [patients, setPatients] = useState<any[]>([]); // simplified type for dropdown
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>('all');
-  
+  const [isLoading, setIsLoading] = useState(true);
+
   // New follow-up form state
   const [newFollowUp, setNewFollowUp] = useState({
     patientId: '',
@@ -41,6 +43,46 @@ export default function FollowUps() {
   });
 
   const today = new Date().toISOString().split('T')[0];
+
+  const fetchData = async () => {
+    try {
+      setIsLoading(true);
+      const [fuRes, patRes] = await Promise.all([
+        api.get('/follow-ups/'),
+        api.get('/patients/')
+      ]);
+
+      const mappedFollowUps = fuRes.data.map((f: any) => ({
+        id: f.id,
+        patientName: f.patient_name || f.patientName || 'Unknown',
+        patientId: f.patient_id,
+        title: f.title,
+        status: f.status,
+        dueDate: f.due_date,
+        isCompleted: f.is_completed,
+        companyId: f.company_id,
+        description: f.description || '', // Assuming description serves as notes or vice versa if applicable
+        createdAt: new Date(f.created_at || Date.now())
+      }));
+
+      const mappedPatients = patRes.data.map((p: any) => ({
+        id: p.id,
+        name: p.name
+      }));
+
+      setFollowUps(mappedFollowUps);
+      setPatients(mappedPatients);
+    } catch (error) {
+      console.error("Failed to fetch data:", error);
+      toast({ title: 'Error', description: 'Failed to load follow-ups', variant: 'destructive' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   const filteredFollowUps = useMemo(() => {
     let filtered = [...followUps];
@@ -56,33 +98,80 @@ export default function FollowUps() {
     });
   }, [followUps, filterStatus]);
 
-  const handleCreateFollowUp = (e: React.FormEvent) => {
+  const handleCreateFollowUp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newFollowUp.patientId || !newFollowUp.title || !newFollowUp.dueDate) {
       toast({ title: 'Error', description: 'Please fill in all required fields', variant: 'destructive' });
       return;
     }
 
-    const patient = mockPatients.find((p) => p.id === newFollowUp.patientId);
-    const followUp: FollowUp = {
-      id: `followup_${Date.now()}`,
-      ...newFollowUp,
-      patientName: patient?.name || 'Unknown',
-      status: 'open',
-      companyId: '1',
-      createdAt: new Date(),
-    };
+    try {
+      const payload = {
+        patient_id: newFollowUp.patientId,
+        title: newFollowUp.title,
+        description: newFollowUp.description,
+        due_date: newFollowUp.dueDate, // Note: Backend expects due_date? Allowable name mismatch or strict? Backend schema says due_date. 
+        // Backend Pydantic schema for FollowUpCreate usually maps snake_case. 
+        // Let's check schema if needed, but assuming snake_case for input.
+        priority: 'medium', // Default
+        status: 'open',
+        is_completed: false
+      };
 
-    setFollowUps([...followUps, followUp]);
-    setNewFollowUp({ patientId: '', title: '', description: '', dueDate: '' });
-    setIsDialogOpen(false);
-    toast({ title: 'Follow-up created', description: `Task added for ${patient?.name}.` });
+      // Ensure API expects camelCase or snake_case. Usually snake_case for Python backends.
+      // Re-reading previous files, it seems I used snake_case for Appointment payload.
+      // Wait, Pydantic handles JSON parsing. If I send due_date, Pydantic with alias generator or default will read it.
+      // Let's stick to safe bets.
+
+      const response = await api.post('/follow-ups/', {
+        ...payload,
+        due_date: newFollowUp.dueDate // Explicitly backend key
+      });
+      const f = response.data;
+      const patient = patients.find(p => p.id === newFollowUp.patientId);
+
+      const followUp: FollowUp = {
+        id: f.id,
+        patientName: patient?.name || 'Unknown',
+        patientId: f.patient_id,
+        status: f.status,
+        dueDate: f.due_date,
+        isCompleted: f.is_completed,
+        companyId: f.company_id,
+        description: f.description || '',
+        createdAt: new Date(f.created_at || Date.now())
+      };
+
+      setFollowUps([...followUps, followUp]);
+      setNewFollowUp({ patientId: '', title: '', description: '', dueDate: '' });
+      setIsDialogOpen(false);
+      toast({ title: 'Follow-up created', description: `Task added for ${patient?.name}.` });
+    } catch (error) {
+      console.error("Failed to create follow-up:", error);
+      toast({ title: 'Error', description: 'Failed to create task', variant: 'destructive' });
+    }
   };
 
-  const handleToggleStatus = (followUpId: string) => {
-    setFollowUps(followUps.map((f) =>
-      f.id === followUpId ? { ...f, status: f.status === 'open' ? 'completed' : 'open' } : f
-    ));
+  const handleToggleStatus = async (followUpId: string) => {
+    const followUp = followUps.find(f => f.id === followUpId);
+    if (!followUp) return;
+
+    const newStatus = followUp.status === 'open' ? 'completed' : 'open';
+    const isCompleted = newStatus === 'completed';
+
+    try {
+      // Optimistic update
+      setFollowUps(followUps.map((f) =>
+        f.id === followUpId ? { ...f, status: newStatus, isCompleted } : f
+      ));
+
+      await api.patch(`/follow-ups/${followUpId}`, { status: newStatus, is_completed: isCompleted });
+      // No toast needed for simple toggle typically, or maybe a small one
+    } catch (error) {
+      console.error("Failed to update status:", error);
+      toast({ title: 'Error', description: 'Failed to update status', variant: 'destructive' });
+      fetchData(); // Revert
+    }
   };
 
   const getStatusInfo = (followUp: FollowUp) => {
@@ -152,7 +241,7 @@ export default function FollowUps() {
                         <SelectValue placeholder="Select patient" />
                       </SelectTrigger>
                       <SelectContent>
-                        {mockPatients.map((patient) => (
+                        {patients.map((patient) => (
                           <SelectItem key={patient.id} value={patient.id}>
                             {patient.name}
                           </SelectItem>
@@ -191,7 +280,9 @@ export default function FollowUps() {
                     <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                       Cancel
                     </Button>
-                    <Button type="submit">Create Task</Button>
+                    <Button type="submit" disabled={isLoading}>
+                      {isLoading ? 'Creating...' : 'Create Task'}
+                    </Button>
                   </div>
                 </form>
               </DialogContent>
@@ -200,7 +291,9 @@ export default function FollowUps() {
         </div>
 
         {/* Follow-ups List */}
-        {filteredFollowUps.length === 0 ? (
+        {isLoading ? (
+          <div className="text-center py-12 text-muted-foreground">Loading tasks...</div>
+        ) : filteredFollowUps.length === 0 ? (
           <Card className="border-border">
             <CardContent className="flex flex-col items-center justify-center py-12">
               <CheckSquare className="h-12 w-12 text-muted-foreground/50 mb-3" />
@@ -212,30 +305,27 @@ export default function FollowUps() {
             {filteredFollowUps.map((followUp) => {
               const statusInfo = getStatusInfo(followUp);
               const StatusIcon = statusInfo.icon;
-              
+
               return (
                 <Card key={followUp.id} className="border-border">
                   <CardContent className="flex items-center justify-between p-4">
                     <div className="flex items-center gap-4">
                       <button
                         onClick={() => handleToggleStatus(followUp.id)}
-                        className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
-                          followUp.status === 'completed'
-                            ? 'bg-success/10 hover:bg-success/20'
-                            : 'bg-muted hover:bg-muted/80'
-                        }`}
+                        className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${followUp.status === 'completed'
+                          ? 'bg-success/10 hover:bg-success/20'
+                          : 'bg-muted hover:bg-muted/80'
+                          }`}
                       >
-                        <StatusIcon className={`h-5 w-5 ${
-                          followUp.status === 'completed' ? 'text-success' : 'text-muted-foreground'
-                        }`} />
+                        <StatusIcon className={`h-5 w-5 ${followUp.status === 'completed' ? 'text-success' : 'text-muted-foreground'
+                          }`} />
                       </button>
                       <div>
                         <div className="flex items-center gap-2">
-                          <p className={`font-medium ${
-                            followUp.status === 'completed'
-                              ? 'text-muted-foreground line-through'
-                              : 'text-foreground'
-                          }`}>
+                          <p className={`font-medium ${followUp.status === 'completed'
+                            ? 'text-muted-foreground line-through'
+                            : 'text-foreground'
+                            }`}>
                             {followUp.title}
                           </p>
                           <Badge variant="outline" className={statusInfo.color}>

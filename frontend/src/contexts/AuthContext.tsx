@@ -41,7 +41,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       name: userData.name,
       role: userData.role,
       companyId: userData.company_id,
-      companyName: userData.company_name
+      companyName: userData.company_name,
+      companyCode: userData.company_code
     };
 
     console.log("Mapped user:", mappedUser);

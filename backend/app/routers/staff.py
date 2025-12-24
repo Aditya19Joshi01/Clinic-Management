@@ -1,7 +1,7 @@
 from typing import List
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
 from app.models import User
@@ -17,7 +17,7 @@ def get_staff(
 ):
     # Only admins can see this list (enforced by dependency)
     # List all users in the company
-    staff_members = db.query(User).filter(User.company_id == current_admin.company_id).all()
+    staff_members = db.query(User).options(joinedload(User.company)).filter(User.company_id == current_admin.company_id).all()
     return staff_members
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
