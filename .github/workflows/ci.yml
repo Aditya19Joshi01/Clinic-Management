@@ -5,10 +5,12 @@ on:
     branches: [ "main" ]
     paths:
       - 'backend/**'
+      - '.github/**'
   pull_request:
     branches: [ "main" ]
     paths:
       - 'backend/**'
+      - '.github/**'
 
 jobs:
   test:
@@ -29,6 +31,11 @@ jobs:
         pip install -r requirements.txt
         
     - name: Test with pytest
+      env:
+        DATABASE_URL: "sqlite:///:memory:"
+        SECRET_KEY: "test_secret_key"
+        ALGORITHM: "HS256"
+        ACCESS_TOKEN_EXPIRE_MINUTES: 60
       run: |
         export PYTHONPATH=$PYTHONPATH:backend
         pytest backend/tests
