@@ -1,7 +1,7 @@
 from typing import List, Optional
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_
 
 from app.database import get_db
@@ -122,7 +122,7 @@ def get_patient_notes(
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
 
-    notes = db.query(Note).filter(
+    notes = db.query(Note).options(joinedload(Note.created_by_user)).filter(
         Note.patient_id == patient_id,
         Note.company_id == current_user.company_id
     ).order_by(Note.created_at.desc()).all()

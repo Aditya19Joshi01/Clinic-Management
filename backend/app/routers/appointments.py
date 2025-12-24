@@ -2,7 +2,7 @@ from typing import List, Optional
 from uuid import UUID
 from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
 from app.models import User, Appointment, Patient
@@ -20,7 +20,7 @@ def get_appointments(
     current_user: User = Depends(security.get_current_user),
     db: Session = Depends(get_db)
 ):
-    query = db.query(Appointment).filter(Appointment.company_id == current_user.company_id)
+    query = db.query(Appointment).options(joinedload(Appointment.patient)).filter(Appointment.company_id == current_user.company_id)
     
     if start_date:
         query = query.filter(Appointment.date >= start_date)

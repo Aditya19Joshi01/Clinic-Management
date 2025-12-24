@@ -1,24 +1,76 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
-import { mockPatients, mockAppointments, mockFollowUps } from '@/data/mockData';
-import { Users, Calendar, CheckSquare, Clock, ArrowRight, AlertCircle } from 'lucide-react';
+import { Users, Calendar, CheckSquare, Clock, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
+import api from '@/lib/api';
+import { Appointment, FollowUp } from '@/types';
+
+interface DashboardStats {
+  totalPatients: number;
+  todayAppointments: number;
+  openFollowUps: number;
+  upcomingAppointments: Appointment[];
+  openFollowUpsList: FollowUp[];
+}
 
 export default function Dashboard() {
   const { user } = useAuth();
-  
-  const today = new Date().toISOString().split('T')[0];
-  
-  const stats = useMemo(() => ({
-    totalPatients: mockPatients.length,
-    todayAppointments: mockAppointments.filter(a => a.date === today && a.status === 'scheduled').length,
-    openFollowUps: mockFollowUps.filter(f => f.status === 'open').length,
-    upcomingAppointments: mockAppointments.filter(a => a.date >= today && a.status === 'scheduled').slice(0, 5),
-  }), [today]);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        console.log("Fetching dashboard stats...");
+        const response = await api.get('/dashboard/stats');
+        console.log("Dashboard fetch success, data:", response.data);
+
+        // Map backend snake_case to frontend camelCase
+        const rawData = response.data;
+        const mappedStats: DashboardStats = {
+          totalPatients: rawData.totalPatients,
+          todayAppointments: rawData.todayAppointments,
+          openFollowUps: rawData.openFollowUps,
+          upcomingAppointments: (rawData.upcomingAppointments || []).map((apt: any) => ({
+            id: apt.id,
+            patientId: apt.patient_id,
+            patientName: apt.patient_name || apt.patientName || "Unknown",
+            date: apt.date,
+            time: apt.time,
+            type: apt.type,
+            status: apt.status,
+            reason: apt.reason,
+            notes: apt.notes
+          })),
+          openFollowUpsList: (rawData.openFollowUpsList || []).map((fu: any) => ({
+            id: fu.id,
+            patientId: fu.patient_id,
+            patientName: fu.patient_name || fu.patientName || "Unknown",
+            title: fu.title,
+            status: fu.status,
+            priority: fu.priority,
+            dueDate: fu.due_date,
+            isCompleted: fu.is_completed,
+            notes: fu.notes
+          }))
+        };
+
+        setStats(mappedStats);
+      } catch (err: any) {
+        console.error("Failed to fetch dashboard stats:", err);
+        setError("Failed to load dashboard data. " + (err.message || ""));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStats();
+  }, []);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -28,6 +80,29 @@ export default function Dashboard() {
       default: return 'bg-muted text-muted-foreground';
     }
   };
+
+  const today = new Date().toISOString().split('T')[0];
+
+  if (loading) {
+    return (
+      <AppLayout>
+        <div className="flex h-[50vh] items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (error || !stats) {
+    return (
+      <AppLayout>
+        <div className="flex flex-col items-center justify-center h-[50vh] text-destructive">
+          <AlertCircle className="h-8 w-8 mb-2" />
+          <p>{error || "No data available"}</p>
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
@@ -148,14 +223,14 @@ export default function Dashboard() {
             </Button>
           </CardHeader>
           <CardContent>
-            {mockFollowUps.filter(f => f.status === 'open').slice(0, 3).length === 0 ? (
+            {stats.openFollowUpsList.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <CheckSquare className="h-12 w-12 text-muted-foreground/50 mb-3" />
                 <p className="text-muted-foreground">No pending follow-ups</p>
               </div>
             ) : (
               <div className="space-y-3">
-                {mockFollowUps.filter(f => f.status === 'open').slice(0, 3).map((followUp) => {
+                {stats.openFollowUpsList.map((followUp) => {
                   const isOverdue = new Date(followUp.dueDate) < new Date(today);
                   return (
                     <div

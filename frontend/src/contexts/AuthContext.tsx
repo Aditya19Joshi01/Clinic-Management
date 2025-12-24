@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { User, UserRole } from '@/types';
+import api from '@/lib/api';
 
 interface AuthContextType {
   user: User | null;
@@ -12,82 +13,92 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Mock data for demo purposes
-const mockCompanies = new Map([
-  ['CLINIC001', { id: '1', name: 'City Health Clinic', code: 'CLINIC001' }],
-]);
-
-const mockUsers = new Map([
-  ['admin@cityhealth.com', { id: '1', email: 'admin@cityhealth.com', password: 'admin123', name: 'Dr. Sarah Johnson', role: 'admin' as UserRole, companyId: '1', companyName: 'City Health Clinic' }],
-  ['staff@cityhealth.com', { id: '2', email: 'staff@cityhealth.com', password: 'staff123', name: 'John Smith', role: 'staff' as UserRole, companyId: '1', companyName: 'City Health Clinic' }],
-]);
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(() => {
     const stored = localStorage.getItem('clinic_user');
     return stored ? JSON.parse(stored) : null;
   });
 
-  const login = useCallback(async (email: string, password: string) => {
-    const mockUser = mockUsers.get(email);
-    if (!mockUser || mockUser.password !== password) {
-      throw new Error('Invalid email or password');
+  const handleAuthResponse = (response: any) => {
+    // Backend returns JSON body: { access_token, user: { ... } }
+    const rootData = response.data;
+    const userData = rootData.user || rootData; // Fallback for safety
+    const token = response.headers['authorization']?.replace('Bearer ', '') || rootData.access_token;
+
+    if (token) {
+      localStorage.setItem('clinic_token', token);
     }
-    const { password: _, ...userWithoutPassword } = mockUser;
-    setUser(userWithoutPassword);
-    localStorage.setItem('clinic_user', JSON.stringify(userWithoutPassword));
+
+    if (!userData || !userData.id) {
+      console.error("Invalid user data received:", rootData);
+      return;
+    }
+
+    // Map snake_case from backend to camelCase for frontend
+    const mappedUser: User = {
+      id: userData.id,
+      email: userData.email,
+      name: userData.name,
+      role: userData.role,
+      companyId: userData.company_id,
+      companyName: userData.company_name
+    };
+
+    console.log("Mapped user:", mappedUser);
+    setUser(mappedUser);
+    localStorage.setItem('clinic_user', JSON.stringify(mappedUser));
+  };
+
+  const login = useCallback(async (email: string, password: string) => {
+    try {
+      const response = await api.post('/auth/login', { email, password });
+      handleAuthResponse(response);
+    } catch (error) {
+      console.error("Login failed:", error);
+      throw error;
+    }
   }, []);
 
   const registerCompany = useCallback(async (companyName: string, adminName: string, email: string, password: string) => {
-    if (mockUsers.has(email)) {
-      throw new Error('Email already registered');
+    try {
+      const response = await api.post('/auth/register/company', {
+        companyName,
+        adminName,
+        email,
+        password
+      });
+      handleAuthResponse(response);
+    } catch (error) {
+      console.error("Company registration failed:", error);
+      throw error;
     }
-    const companyId = `company_${Date.now()}`;
-    const companyCode = `CLINIC${String(mockCompanies.size + 1).padStart(3, '0')}`;
-    
-    const newUser: User = {
-      id: `user_${Date.now()}`,
-      email,
-      name: adminName,
-      role: 'admin',
-      companyId,
-      companyName,
-    };
-    
-    mockCompanies.set(companyCode, { id: companyId, name: companyName, code: companyCode });
-    mockUsers.set(email, { ...newUser, password });
-    
-    setUser(newUser);
-    localStorage.setItem('clinic_user', JSON.stringify(newUser));
   }, []);
 
   const registerStaff = useCallback(async (companyCode: string, name: string, email: string, password: string) => {
-    if (mockUsers.has(email)) {
-      throw new Error('Email already registered');
+    try {
+      const response = await api.post('/auth/register/staff', {
+        companyCode,
+        name,
+        email,
+        password
+      });
+      handleAuthResponse(response);
+    } catch (error) {
+      console.error("Staff registration failed:", error);
+      throw error;
     }
-    const company = mockCompanies.get(companyCode);
-    if (!company) {
-      throw new Error('Invalid company code');
-    }
-    
-    const newUser: User = {
-      id: `user_${Date.now()}`,
-      email,
-      name,
-      role: 'staff',
-      companyId: company.id,
-      companyName: company.name,
-    };
-    
-    mockUsers.set(email, { ...newUser, password });
-    
-    setUser(newUser);
-    localStorage.setItem('clinic_user', JSON.stringify(newUser));
   }, []);
 
-  const logout = useCallback(() => {
-    setUser(null);
-    localStorage.removeItem('clinic_user');
+  const logout = useCallback(async () => {
+    try {
+      await api.post('/auth/logout');
+    } catch (e) {
+      console.error("Logout error (ignoring):", e);
+    } finally {
+      setUser(null);
+      localStorage.removeItem('clinic_user');
+      localStorage.removeItem('clinic_token');
+    }
   }, []);
 
   return (

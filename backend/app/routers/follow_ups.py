@@ -1,7 +1,7 @@
 from typing import List, Optional
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
 from app.models import User, FollowUp, Patient
@@ -17,7 +17,7 @@ def get_followups(
     current_user: User = Depends(security.get_current_user),
     db: Session = Depends(get_db)
 ):
-    query = db.query(FollowUp).filter(FollowUp.company_id == current_user.company_id)
+    query = db.query(FollowUp).options(joinedload(FollowUp.patient)).filter(FollowUp.company_id == current_user.company_id)
     
     if status:
         query = query.filter(FollowUp.status == status)

@@ -9,13 +9,23 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(title="Clinic Management System", version="1.0.0")
 
 # CORS Configuration
-origins = ["http://localhost:5173", "http://localhost:3000"]
+origins = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://localhost",
+    "http://localhost:80",
+    "http://localhost:7000",
+    "http://127.0.0.1",
+    "http://127.0.0.1:80",
+]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Authorization"],
 )
 
 app.include_router(auth.router)
